@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 1202 1202" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <g transform="matrix(4.166667,0,0,4.166667,-3065.095462,-1998.428796)">
+        <g transform="matrix(1,0,0,1,22.344116,13.925654)">
+            <g transform="matrix(1,0,0,1,0,-102.022454)">
+                <rect x="713.279" y="567.72" width="288.377" height="288.377" style="fill:rgb(24,0,62);"/>
+            </g>
+            <g transform="matrix(1,0,0,1,0.634883,6.850546)">
+                <g transform="matrix(6.818773,0,0,6.818773,-4819.566121,-3803.612708)">
+                    <g transform="matrix(14,0,0,14,850.16224,652.184964)">
+                    </g>
+                    <text x="814.882px" y="652.185px" style="font-family:'Aka-AcidGR-SoftIceCream';font-size:14px;fill:white;">TeleP</text>
+                </g>
+                <g transform="matrix(1,0,0,1,-22.048987,-59.895087)">
+                    <path d="M759.744,622.477L998.019,622.477" style="fill:none;stroke:rgb(210,46,0);stroke-width:10px;"/>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

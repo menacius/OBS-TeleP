@@ -1,0 +1,9 @@
+build/
+.deps/
+.gradle/
+android/.gradle/
+android/app/build/
+*.user
+*.suo
+*.vcxproj*
+*.sln
