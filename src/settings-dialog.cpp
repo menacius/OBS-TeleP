@@ -18,7 +18,10 @@
 #include <QScreen>
 #include <QSignalBlocker>
 #include <QSvgRenderer>
+#include <QTableWidget>
+#include <QTableWidgetItem>
 #include <QVBoxLayout>
+#include <QHeaderView>
 
 TeleprompterSettingsDialog::TeleprompterSettingsDialog(TeleprompterState *state, TeleprompterWindow *window, QWidget *parent)
 	: QDialog(parent), state_(state), window_(window)
@@ -30,16 +33,23 @@ TeleprompterSettingsDialog::TeleprompterSettingsDialog(TeleprompterState *state,
 	auto *root = new QVBoxLayout(this);
 	auto *form = new QFormLayout();
 
-	screenCombo_ = new QComboBox(this);
+	displayTable_ = new QTableWidget(this);
+	displayTable_->setColumnCount(2);
+	displayTable_->setHorizontalHeaderLabels({Tr("Display.ColumnDisplay"), Tr("Display.ColumnEnable")});
+	displayTable_->horizontalHeader()->setStretchLastSection(false);
+	displayTable_->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+	displayTable_->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+	displayTable_->verticalHeader()->setVisible(false);
+	displayTable_->setSelectionMode(QAbstractItemView::NoSelection);
+	displayTable_->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	displayTable_->setMinimumHeight(120);
 	renderScaleCombo_ = new QComboBox(this);
 	renderScaleCombo_->addItem(Tr("RenderScale.Full"), 1.0);
 	renderScaleCombo_->addItem(Tr("RenderScale.ThreeQuarter"), 0.75);
 	renderScaleCombo_->addItem(Tr("RenderScale.Half"), 0.5);
-	fullscreenOutputCheck_ = new QCheckBox(Tr("Check.ShowFullscreenOutput"), this);
 
-	form->addRow(Tr("Label.TargetDisplay"), screenCombo_);
+	form->addRow(Tr("Label.TargetDisplay"), displayTable_);
 	form->addRow(Tr("Label.OutputRenderScale"), renderScaleCombo_);
-	form->addRow(fullscreenOutputCheck_);
 
 	overlayEnabledCheck_ = new QCheckBox(Tr("Overlay.Enabled"), this);
 	overlayPositionCombo_ = new QComboBox(this);
@@ -68,9 +78,8 @@ TeleprompterSettingsDialog::TeleprompterSettingsDialog(TeleprompterState *state,
 
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::hide);
 	connect(aboutButton, &QPushButton::clicked, this, &TeleprompterSettingsDialog::showAbout);
-	connect(screenCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &TeleprompterSettingsDialog::applyDisplay);
-	connect(renderScaleCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &TeleprompterSettingsDialog::applyDisplay);
-	connect(fullscreenOutputCheck_, &QCheckBox::toggled, this, &TeleprompterSettingsDialog::applyDisplay);
+	connect(displayTable_, &QTableWidget::itemChanged, this, &TeleprompterSettingsDialog::applyDisplay);
+	connect(renderScaleCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &TeleprompterSettingsDialog::applyRenderScale);
 	connect(overlayEnabledCheck_, &QCheckBox::toggled, this, &TeleprompterSettingsDialog::applyOverlay);
 	connect(overlayPositionCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &TeleprompterSettingsDialog::applyOverlay);
 	connect(overlayProgressCheck_, &QCheckBox::toggled, this, &TeleprompterSettingsDialog::applyOverlay);
@@ -87,19 +96,43 @@ TeleprompterSettingsDialog::TeleprompterSettingsDialog(TeleprompterState *state,
 
 void TeleprompterSettingsDialog::refreshScreens()
 {
-	const QSignalBlocker blocker(screenCombo_);
-	screenCombo_->clear();
+	const QSignalBlocker blocker(displayTable_);
+	syncingDisplay_ = true;
+	displayTable_->setRowCount(0);
 	const auto screens = QGuiApplication::screens();
-	for (int i = 0; i < screens.size(); ++i)
-		screenCombo_->addItem(Tr("Display.ItemFormat").arg(i + 1).arg(screens[i]->name()), i);
-	screenCombo_->setCurrentIndex(qBound(0, state_->targetScreenIndex(), qMax(0, screenCombo_->count() - 1)));
+	displayTable_->setRowCount(screens.size());
+	const int target = qBound(0, state_->targetScreenIndex(), qMax(0, screens.size() - 1));
+	for (int i = 0; i < screens.size(); ++i) {
+		auto *displayItem = new QTableWidgetItem(Tr("Display.ItemFormat").arg(i + 1).arg(screens[i]->name()));
+		displayItem->setData(Qt::UserRole, i);
+		displayItem->setFlags(Qt::ItemIsEnabled);
+		displayTable_->setItem(i, 0, displayItem);
+
+		auto *enableItem = new QTableWidgetItem();
+		enableItem->setData(Qt::UserRole, i);
+		enableItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+		enableItem->setCheckState(state_->outputFullscreenEnabled() && i == target ? Qt::Checked : Qt::Unchecked);
+		enableItem->setTextAlignment(Qt::AlignCenter);
+		displayTable_->setItem(i, 1, enableItem);
+	}
+	displayTable_->resizeRowsToContents();
+	syncingDisplay_ = false;
+
+	if (screens.isEmpty()) {
+		state_->setOutputFullscreenEnabled(false);
+		syncOutputWindow();
+	} else if (state_->targetScreenIndex() != target) {
+		state_->setTargetScreenIndex(target);
+		syncOutputWindow();
+	}
 }
 
 void TeleprompterSettingsDialog::syncFromState()
 {
-	const QSignalBlocker screenBlocker(screenCombo_);
+	if (syncingDisplay_)
+		return;
+	const QSignalBlocker displayBlocker(displayTable_);
 	const QSignalBlocker scaleBlocker(renderScaleCombo_);
-	const QSignalBlocker fullscreenBlocker(fullscreenOutputCheck_);
 	const QSignalBlocker overlayEnabledBlocker(overlayEnabledCheck_);
 	const QSignalBlocker overlayPositionBlocker(overlayPositionCombo_);
 	const QSignalBlocker overlayProgressBlocker(overlayProgressCheck_);
@@ -107,14 +140,17 @@ void TeleprompterSettingsDialog::syncFromState()
 	const QSignalBlocker overlaySpeedBlocker(overlaySpeedCheck_);
 	const QSignalBlocker overlayTitleBlocker(overlayTitleCheck_);
 
-	screenCombo_->setCurrentIndex(qBound(0, state_->targetScreenIndex(), qMax(0, screenCombo_->count() - 1)));
+	const int target = state_->targetScreenIndex();
+	for (int row = 0; row < displayTable_->rowCount(); ++row) {
+		if (auto *item = displayTable_->item(row, 1))
+			item->setCheckState(state_->outputFullscreenEnabled() && row == target ? Qt::Checked : Qt::Unchecked);
+	}
 	for (int i = 0; i < renderScaleCombo_->count(); ++i) {
 		if (qAbs(renderScaleCombo_->itemData(i).toDouble() - state_->outputRenderScale()) < 0.01) {
 			renderScaleCombo_->setCurrentIndex(i);
 			break;
 		}
 	}
-	fullscreenOutputCheck_->setChecked(state_->outputFullscreenEnabled());
 
 	const TeleprompterOverlaySettings overlay = state_->overlaySettings();
 	overlayEnabledCheck_->setChecked(overlay.enabled);
@@ -126,11 +162,34 @@ void TeleprompterSettingsDialog::syncFromState()
 	overlayTitleCheck_->setChecked(overlay.showTitle);
 }
 
-void TeleprompterSettingsDialog::applyDisplay()
+void TeleprompterSettingsDialog::applyDisplay(QTableWidgetItem *item)
 {
-	state_->setTargetScreenIndex(screenCombo_->currentData().toInt());
+	if (syncingDisplay_ || !item || item->column() != 1)
+		return;
+
+	const int row = item->row();
+	const bool enabled = item->checkState() == Qt::Checked;
+	syncingDisplay_ = true;
+	for (int i = 0; i < displayTable_->rowCount(); ++i) {
+		if (i == row)
+			continue;
+		if (auto *other = displayTable_->item(i, 1))
+			other->setCheckState(Qt::Unchecked);
+	}
+	state_->setTargetScreenIndex(row);
+	state_->setOutputFullscreenEnabled(enabled);
+	syncingDisplay_ = false;
+	syncOutputWindow();
+}
+
+void TeleprompterSettingsDialog::applyRenderScale()
+{
 	state_->setOutputRenderScale(renderScaleCombo_->currentData().toDouble());
-	state_->setOutputFullscreenEnabled(fullscreenOutputCheck_->isChecked());
+	syncOutputWindow();
+}
+
+void TeleprompterSettingsDialog::syncOutputWindow()
+{
 	if (state_->outputFullscreenEnabled())
 		window_->showOnScreen(state_->targetScreenIndex());
 	else
