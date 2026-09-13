@@ -7,14 +7,17 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFontComboBox>
+#include <QIcon>
 #include <QLabel>
 #include <QNetworkAccessManager>
 #include <QPlainTextEdit>
 #include <QSpinBox>
+#include <QTimer>
 #include <QWidget>
 
 class QCheckBox;
 class QLineEdit;
+class QPushButton;
 
 class TeleprompterDock : public QWidget {
 	Q_OBJECT
@@ -28,6 +31,9 @@ public:
 public slots:
 	void syncOutputWindow();
 
+protected:
+	void changeEvent(QEvent *event) override;
+
 private slots:
 	void applyEditor();
 	void importText();
@@ -38,9 +44,13 @@ private slots:
 	void showOutput();
 	void applyDisplay();
 	void updateStatus();
+	void updatePlaybackStatus();
 	void applyStyle();
 
 private:
+	void refreshControlIcons();
+	void updatePlayPauseButtonAppearance();
+
 	TeleprompterState *state_ = nullptr;
 	TeleprompterWindow *window_ = nullptr;
 	RemoteServer *remote_ = nullptr;
@@ -66,6 +76,13 @@ private:
 	QCheckBox *mirrorVerticalCheck_ = nullptr;
 	QCheckBox *positionIndicatorCheck_ = nullptr;
 	QLabel *statusLabel_ = nullptr;
+	QLabel *playbackHeaderLabel_ = nullptr;
 	QLabel *remoteLabel_ = nullptr;
+	QPushButton *playPauseButton_ = nullptr;
+	QVector<QPair<QPushButton *, QString>> controlButtons_;
+	QTimer playbackStatusTimer_;
+	QString lastPlaybackStatusText_;
+	int lastHeaderPlaybackState_ = -1;
+	int lastHeaderProgress_ = -1;
 	QNetworkAccessManager network_;
 };

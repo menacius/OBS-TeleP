@@ -1,8 +1,16 @@
-# OBS TeleP
+<p align="center">
+  <img src="data/o-prompter-icon.svg" width="128" alt="O-Prompter logo">
+</p>
+
+# O-Prompter
+
+**TELEPROMPTER PLUGIN FOR OBS**
 
 Native C++/Qt OBS teleprompter/autocue plugin with a companion Android LAN remote.
 
-OBS TeleP adds a dock inside OBS for editing and controlling scripts, and opens a separate fullscreen teleprompter output window on a selected display. The output is independent from the OBS preview/program canvas and does not affect scenes unless future source integration is added.
+Download the [Windows x64 OBS plugin](https://software.omniatv.com/o-prompter/downloads/O-Prompter-0.1.0-Windows-x64.zip) and the optional [Android remote](https://software.omniatv.com/o-prompter/downloads/O-Prompter-Remote-0.1.0-Android.apk). See the [O-Prompter product page](https://software.omniatv.com/o-prompter/) for release details.
+
+O-Prompter adds a dock inside OBS for editing and controlling scripts, and opens a separate fullscreen teleprompter output window on a selected display. The output is independent from the OBS preview/program canvas and does not affect scenes unless future source integration is added.
 
 ## Features
 
@@ -13,6 +21,7 @@ OBS TeleP adds a dock inside OBS for editing and controlling scripts, and opens 
 - Play/pause, stop, restart, jump to top, previous/next marker, speed control, and OBS frontend hotkeys.
 - Font family, font size, line spacing, paragraph spacing, margins, text color, background color, horizontal alignment, and vertical alignment.
 - Optional reading position indicator.
+- Optional vertical progress bar on the left or right edge, with configurable thickness and color.
 - Marker support with `#marker Name` lines.
 - Persistent OBS profile/plugin settings, including script text, style, target display, fullscreen output state, remote token, output resolution, and audio trigger settings.
 - Output resolution options: `100%`, `75%`, and `50%` internal render scale for lower CPU/GPU load on large displays.
@@ -58,7 +67,7 @@ The script checks for required tooling and downloads missing local dependencies 
 Native plugin output:
 
 ```text
-build/obs-telep/bin/64bit/obs-telep.dll
+build/o-prompter/bin/64bit/o-prompter.dll
 ```
 
 Android debug APK output:
@@ -72,15 +81,15 @@ android/app/build/outputs/apk/debug/app-debug.apk
 Copy the staged plugin folder contents into the OBS plugin directory:
 
 ```text
-build/obs-telep/
+build/o-prompter/
 ```
 
 Expected OBS layout:
 
 ```text
 obs-studio/
-├── obs-plugins/64bit/obs-telep.dll
-└── data/obs-plugins/obs-telep/locale/en-US.ini
+├── obs-plugins/64bit/o-prompter.dll
+└── data/obs-plugins/o-prompter/locale/en-US.ini
 ```
 
 Depending on how OBS is installed, the target directory may be under `C:\Program Files\obs-studio` or a portable OBS folder.
@@ -89,7 +98,7 @@ Depending on how OBS is installed, the target directory may be under `C:\Program
 
 The dock and Android app can load scripts from plain text URLs.
 
-For Etherpad-style URLs containing `/p/{pad}`, OBS TeleP automatically requests:
+For Etherpad-style URLs containing `/p/{pad}`, O-Prompter automatically requests:
 
 ```text
 /export/txt
@@ -106,7 +115,7 @@ Default plugin ports:
 - TCP control: `4457`
 - UDP discovery: `4458`
 
-The app can scan the LAN for available OBS TeleP instances. Discovery does not expose the pairing token; enter the token shown in the OBS dock.
+The app can scan the LAN for available O-Prompter instances. Discovery does not expose the pairing token; enter the token shown in the OBS dock.
 
 The app stores these values between sessions:
 

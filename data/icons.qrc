@@ -1,0 +1,10 @@
+<RCC>
+  <qresource prefix="/o-prompter/icons">
+    <file alias="play.svg">icons/play.svg</file>
+    <file alias="pause.svg">icons/pause.svg</file>
+    <file alias="stop.svg">icons/stop.svg</file>
+    <file alias="restart.svg">icons/restart.svg</file>
+    <file alias="previous.svg">icons/previous.svg</file>
+    <file alias="next.svg">icons/next.svg</file>
+  </qresource>
+</RCC>

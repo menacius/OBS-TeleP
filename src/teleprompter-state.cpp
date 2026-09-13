@@ -19,7 +19,9 @@ TeleprompterState::TeleprompterState(QObject *parent) : QObject(parent)
 
 double TeleprompterState::progress() const
 {
-	return qBound(0.0, positionPx_ / qMax(1.0, contentHeight_), 1.0);
+	if (contentHeight_ <= 0.0)
+		return 0.0;
+	return qBound(0.0, positionPx_ / contentHeight_, 1.0);
 }
 
 void TeleprompterState::setTitle(const QString &title)
@@ -50,6 +52,14 @@ void TeleprompterState::setOverlaySettings(const TeleprompterOverlaySettings &se
 	emit statusChanged();
 }
 
+void TeleprompterState::setProgressBarSettings(const TeleprompterProgressBarSettings &settings)
+{
+	progressBarSettings_ = settings;
+	progressBarSettings_.thickness = qBound(2, progressBarSettings_.thickness, 80);
+	emit displayChanged();
+	emit statusChanged();
+}
+
 void TeleprompterState::setSpeed(double pxPerSecond)
 {
 	speedPxPerSecond_ = qBound(0.0, pxPerSecond, 600.0);
@@ -59,7 +69,12 @@ void TeleprompterState::setSpeed(double pxPerSecond)
 
 void TeleprompterState::setContentHeight(double height)
 {
-	contentHeight_ = qMax(1.0, height);
+	contentHeight_ = qMax(0.0, height);
+	const double clampedPosition = qBound(0.0, positionPx_, contentHeight_);
+	if (!qFuzzyCompare(positionPx_ + 1.0, clampedPosition + 1.0)) {
+		positionPx_ = clampedPosition;
+		emit positionChanged();
+	}
 	recalculateMarkers();
 }
 
@@ -125,9 +140,11 @@ void TeleprompterState::setAudioPauseOverride(bool enabled)
 
 void TeleprompterState::play()
 {
-	if (playing_)
+	if (isPlaying())
 		return;
-	playing_ = true;
+	if (contentHeight_ > 0.0 && positionPx_ >= contentHeight_)
+		setPosition(0.0);
+	playbackState_ = TeleprompterPlaybackState::Playing;
 	elapsed_.restart();
 	timer_.start();
 	emit playbackChanged();
@@ -136,9 +153,9 @@ void TeleprompterState::play()
 
 void TeleprompterState::pause()
 {
-	if (!playing_)
+	if (!isPlaying())
 		return;
-	playing_ = false;
+	playbackState_ = TeleprompterPlaybackState::Paused;
 	timer_.stop();
 	emit playbackChanged();
 	emit statusChanged();
@@ -146,12 +163,12 @@ void TeleprompterState::pause()
 
 void TeleprompterState::playPause()
 {
-	playing_ ? pause() : play();
+	isPlaying() ? pause() : play();
 }
 
 void TeleprompterState::stop()
 {
-	playing_ = false;
+	playbackState_ = TeleprompterPlaybackState::Stopped;
 	timer_.stop();
 	setPosition(0.0);
 	emit playbackChanged();
@@ -208,7 +225,7 @@ void TeleprompterState::setJogMultiplier(double multiplier)
 	if (!qFuzzyIsNull(jogMultiplier_) && !timer_.isActive()) {
 		elapsed_.restart();
 		timer_.start();
-	} else if (qFuzzyIsNull(jogMultiplier_) && !playing_) {
+	} else if (qFuzzyIsNull(jogMultiplier_) && !isPlaying()) {
 		timer_.stop();
 	}
 	emit playbackChanged();
@@ -218,12 +235,12 @@ void TeleprompterState::setJogMultiplier(double multiplier)
 void TeleprompterState::tick()
 {
 	const double seconds = elapsed_.restart() / 1000.0;
-	const double velocity = (playing_ ? speedPxPerSecond_ : 0.0) + (jogMultiplier_ * speedPxPerSecond_);
+	const double velocity = (isPlaying() ? speedPxPerSecond_ : 0.0) + (jogMultiplier_ * speedPxPerSecond_);
 	positionPx_ = qBound(0.0, positionPx_ + velocity * seconds, contentHeight_);
 	emit positionChanged();
 	if (positionPx_ >= contentHeight_ && velocity > 0.0)
 		pause();
-	else if (!playing_ && qFuzzyIsNull(jogMultiplier_))
+	else if (!isPlaying() && qFuzzyIsNull(jogMultiplier_))
 		timer_.stop();
 }
 
@@ -275,6 +292,12 @@ QJsonObject TeleprompterState::toJson() const
 	overlay["showSpeed"] = overlaySettings_.showSpeed;
 	overlay["showTitle"] = overlaySettings_.showTitle;
 
+	QJsonObject progressBar;
+	progressBar["enabled"] = progressBarSettings_.enabled;
+	progressBar["position"] = progressBarSettings_.position;
+	progressBar["thickness"] = progressBarSettings_.thickness;
+	progressBar["color"] = progressBarSettings_.color.name(QColor::HexArgb);
+
 	object["title"] = title_;
 	object["script"] = script_;
 	object["speed"] = speedPxPerSecond_;
@@ -287,6 +310,7 @@ QJsonObject TeleprompterState::toJson() const
 	object["audioResumeDelaySeconds"] = audioResumeDelaySeconds_;
 	object["style"] = style;
 	object["overlay"] = overlay;
+	object["progressBar"] = progressBar;
 	return object;
 }
 
@@ -326,6 +350,12 @@ void TeleprompterState::loadFromJson(const QJsonObject &object)
 	overlaySettings_.showPlaybackState = overlay["showPlaybackState"].toBool(overlaySettings_.showPlaybackState);
 	overlaySettings_.showSpeed = overlay["showSpeed"].toBool(overlaySettings_.showSpeed);
 	overlaySettings_.showTitle = overlay["showTitle"].toBool(overlaySettings_.showTitle);
+
+	const QJsonObject progressBar = object["progressBar"].toObject();
+	progressBarSettings_.enabled = progressBar["enabled"].toBool(progressBarSettings_.enabled);
+	progressBarSettings_.position = progressBar["position"].toInt(progressBarSettings_.position);
+	progressBarSettings_.thickness = qBound(2, progressBar["thickness"].toInt(progressBarSettings_.thickness), 80);
+	progressBarSettings_.color = QColor(progressBar["color"].toString(progressBarSettings_.color.name(QColor::HexArgb)));
 
 	recalculateMarkers();
 	emit scriptChanged();

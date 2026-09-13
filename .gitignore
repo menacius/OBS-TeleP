@@ -3,6 +3,7 @@ build/
 .gradle/
 android/.gradle/
 android/app/build/
+deploy/
 *.user
 *.suo
 *.vcxproj*

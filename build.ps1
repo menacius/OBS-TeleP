@@ -394,7 +394,7 @@ function Build-Native {
     throw "Native build failed with exit code $LASTEXITCODE"
   }
 
-  $dll = Join-Path $BuildPath "obs-telep\bin\64bit\obs-telep.dll"
+  $dll = Join-Path $BuildPath "o-prompter\bin\64bit\o-prompter.dll"
   if (-not (Test-Path -LiteralPath $dll)) {
     throw "Build completed but expected plugin DLL was not found at '$dll'."
   }

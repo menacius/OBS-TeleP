@@ -38,6 +38,19 @@ struct TeleprompterOverlaySettings {
 	bool showTitle = true;
 };
 
+struct TeleprompterProgressBarSettings {
+	bool enabled = false;
+	int position = 1;
+	int thickness = 10;
+	QColor color = QColor(14, 165, 255);
+};
+
+enum class TeleprompterPlaybackState {
+	Stopped,
+	Paused,
+	Playing,
+};
+
 class TeleprompterState : public QObject {
 	Q_OBJECT
 
@@ -48,10 +61,12 @@ public:
 	QString script() const { return script_; }
 	TeleprompterStyle style() const { return style_; }
 	TeleprompterOverlaySettings overlaySettings() const { return overlaySettings_; }
+	TeleprompterProgressBarSettings progressBarSettings() const { return progressBarSettings_; }
 	double speed() const { return speedPxPerSecond_; }
 	double position() const { return positionPx_; }
 	double progress() const;
-	bool isPlaying() const { return playing_; }
+	bool isPlaying() const { return playbackState_ == TeleprompterPlaybackState::Playing; }
+	TeleprompterPlaybackState playbackState() const { return playbackState_; }
 	int targetScreenIndex() const { return targetScreenIndex_; }
 	bool outputFullscreenEnabled() const { return outputFullscreenEnabled_; }
 	double outputRenderScale() const { return outputRenderScale_; }
@@ -66,6 +81,7 @@ public:
 	void setScript(const QString &script);
 	void setStyle(const TeleprompterStyle &style);
 	void setOverlaySettings(const TeleprompterOverlaySettings &settings);
+	void setProgressBarSettings(const TeleprompterProgressBarSettings &settings);
 	void setSpeed(double pxPerSecond);
 	void setContentHeight(double height);
 	void setPosition(double positionPx);
@@ -111,10 +127,11 @@ private:
 	QString script_;
 	TeleprompterStyle style_;
 	TeleprompterOverlaySettings overlaySettings_;
+	TeleprompterProgressBarSettings progressBarSettings_;
 	double speedPxPerSecond_ = 70.0;
 	double positionPx_ = 0.0;
 	double contentHeight_ = 1.0;
-	bool playing_ = false;
+	TeleprompterPlaybackState playbackState_ = TeleprompterPlaybackState::Stopped;
 	int targetScreenIndex_ = 0;
 	bool outputFullscreenEnabled_ = false;
 	double outputRenderScale_ = 1.0;

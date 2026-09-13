@@ -7,21 +7,26 @@
 
 #include <QCheckBox>
 #include <QColorDialog>
+#include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFontComboBox>
 #include <QFormLayout>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLineEdit>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QPainter>
 #include <QProcess>
 #include <QPushButton>
 #include <QScreen>
 #include <QSignalBlocker>
+#include <QSvgRenderer>
 #include <QTabWidget>
 #include <QTextStream>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
@@ -39,12 +44,33 @@ bool IsAudioInputCaptureSource(obs_source_t *source)
 	return sourceId.contains(QStringLiteral("input_capture"), Qt::CaseInsensitive) &&
 	       !sourceId.contains(QStringLiteral("output_capture"), Qt::CaseInsensitive);
 }
+
+QIcon SvgIcon(const QString &resourcePath, const QColor &color)
+{
+	QFile file(resourcePath);
+	if (!file.open(QIODevice::ReadOnly))
+		return {};
+	QByteArray svg = file.readAll();
+	svg.replace("currentColor", color.name().toUtf8());
+
+	QSvgRenderer renderer(svg);
+	QPixmap pixmap(48, 48);
+	pixmap.setDevicePixelRatio(2.0);
+	pixmap.fill(Qt::transparent);
+	QPainter painter(&pixmap);
+	renderer.render(&painter, QRectF(0, 0, 24, 24));
+	return QIcon(pixmap);
+}
 }
 
 TeleprompterDock::TeleprompterDock(TeleprompterState *state, TeleprompterWindow *window, RemoteServer *remote, QWidget *parent)
 	: QWidget(parent), state_(state), window_(window), remote_(remote)
 {
 	auto *root = new QVBoxLayout(this);
+	playbackHeaderLabel_ = new QLabel(this);
+	playbackHeaderLabel_->setAlignment(Qt::AlignCenter);
+	playbackHeaderLabel_->setMargin(4);
+	root->addWidget(playbackHeaderLabel_);
 	auto *tabs = new QTabWidget(this);
 	root->addWidget(tabs);
 
@@ -69,53 +95,49 @@ TeleprompterDock::TeleprompterDock(TeleprompterState *state, TeleprompterWindow 
 	urlRow->addWidget(urlEdit_, 1);
 	urlRow->addWidget(loadUrlButton);
 	scriptLayout->addLayout(urlRow);
-	tabs->addTab(scriptPage, Tr("Tab.Script"));
 
-	auto *controlPage = new QWidget(this);
-	auto *controlLayout = new QVBoxLayout(controlPage);
 	auto *buttonRow = new QHBoxLayout();
-	const auto addButton = [&](const QString &text, auto slot) {
-		auto *button = new QPushButton(text, controlPage);
+	const auto addButton = [&](const QString &accessibleText, const QString &iconName, auto slot) {
+		auto *button = new QPushButton(scriptPage);
+		button->setIconSize(QSize(22, 22));
+		button->setMinimumSize(36, 34);
+		button->setToolTip(accessibleText);
+		button->setAccessibleName(accessibleText);
 		connect(button, &QPushButton::clicked, state_, slot);
 		buttonRow->addWidget(button);
+		controlButtons_.append(qMakePair(button, iconName));
+		return button;
 	};
-	addButton(Tr("Button.PlayPause"), &TeleprompterState::playPause);
-	addButton(Tr("Button.Stop"), &TeleprompterState::stop);
-	addButton(Tr("Button.Restart"), &TeleprompterState::restart);
-	addButton(Tr("Button.Top"), &TeleprompterState::jumpToTop);
-	controlLayout->addLayout(buttonRow);
-
-	auto *markerRow = new QHBoxLayout();
-	auto *prevMarker = new QPushButton(Tr("Button.PreviousMarker"), controlPage);
-	auto *nextMarker = new QPushButton(Tr("Button.NextMarker"), controlPage);
-	connect(prevMarker, &QPushButton::clicked, state_, &TeleprompterState::jumpToPreviousMarker);
-	connect(nextMarker, &QPushButton::clicked, state_, &TeleprompterState::jumpToNextMarker);
-	markerRow->addWidget(prevMarker);
-	markerRow->addWidget(nextMarker);
-	controlLayout->addLayout(markerRow);
+	addButton(Tr("Button.PreviousMarker"), QStringLiteral("previous"), &TeleprompterState::jumpToPreviousMarker);
+	playPauseButton_ = addButton(Tr("Button.PlayPause"), QStringLiteral("play"), &TeleprompterState::playPause);
+	addButton(Tr("Button.Restart"), QStringLiteral("restart"), &TeleprompterState::restart);
+	addButton(Tr("Button.Stop"), QStringLiteral("stop"), &TeleprompterState::stop);
+	addButton(Tr("Button.NextMarker"), QStringLiteral("next"), &TeleprompterState::jumpToNextMarker);
+	buttonRow->addStretch();
+	scriptLayout->addLayout(buttonRow);
+	refreshControlIcons();
 
 	auto *controlForm = new QFormLayout();
-	speedSpin_ = new QDoubleSpinBox(controlPage);
+	speedSpin_ = new QDoubleSpinBox(scriptPage);
 	speedSpin_->setRange(0, 600);
 	speedSpin_->setSuffix(Tr("Unit.PixelsPerSecond"));
 	speedSpin_->setValue(state_->speed());
 	controlForm->addRow(Tr("Label.ScrollSpeed"), speedSpin_);
-	audioSourceCombo_ = new QComboBox(controlPage);
+	audioSourceCombo_ = new QComboBox(scriptPage);
 	controlForm->addRow(Tr("Label.PauseWhenAudioInactive"), audioSourceCombo_);
-	resumeOnAudioActiveCheck_ = new QCheckBox(Tr("Check.ResumeWhenAudioActive"), controlPage);
-	audioResumeDelaySpin_ = new QDoubleSpinBox(controlPage);
+	resumeOnAudioActiveCheck_ = new QCheckBox(Tr("Check.ResumeWhenAudioActive"), scriptPage);
+	audioResumeDelaySpin_ = new QDoubleSpinBox(scriptPage);
 	audioResumeDelaySpin_->setRange(0.0, 30.0);
 	audioResumeDelaySpin_->setSingleStep(0.5);
 	audioResumeDelaySpin_->setSuffix(Tr("Unit.Seconds"));
 	controlForm->addRow(resumeOnAudioActiveCheck_);
 	controlForm->addRow(Tr("Label.AudioResumeDelay"), audioResumeDelaySpin_);
-	controlLayout->addLayout(controlForm);
-	statusLabel_ = new QLabel(controlPage);
-	remoteLabel_ = new QLabel(controlPage);
-	controlLayout->addWidget(statusLabel_);
-	controlLayout->addWidget(remoteLabel_);
-	controlLayout->addStretch();
-	tabs->addTab(controlPage, Tr("Tab.Control"));
+	scriptLayout->addLayout(controlForm);
+	statusLabel_ = new QLabel(scriptPage);
+	remoteLabel_ = new QLabel(scriptPage);
+	scriptLayout->addWidget(statusLabel_);
+	scriptLayout->addWidget(remoteLabel_);
+	tabs->addTab(scriptPage, Tr("Tab.Script"));
 
 	auto *stylePage = new QWidget(this);
 	auto *styleForm = new QFormLayout(stylePage);
@@ -185,6 +207,13 @@ TeleprompterDock::TeleprompterDock(TeleprompterState *state, TeleprompterWindow 
 	connect(positionIndicatorCheck_, &QCheckBox::toggled, this, &TeleprompterDock::applyStyle);
 
 	connect(state_, &TeleprompterState::statusChanged, this, &TeleprompterDock::updateStatus);
+	playbackStatusTimer_.setTimerType(Qt::CoarseTimer);
+	playbackStatusTimer_.setInterval(500);
+	connect(&playbackStatusTimer_, &QTimer::timeout, this, [this] {
+		if (isVisible())
+			updatePlaybackStatus();
+	});
+	playbackStatusTimer_.start();
 	connect(state_, &TeleprompterState::displayChanged, this, &TeleprompterDock::syncOutputWindow);
 	connect(state_, &TeleprompterState::scriptChanged, this, [this] {
 		if (scriptEdit_->toPlainText() != state_->script() || titleEdit_->text() != state_->title())
@@ -198,6 +227,61 @@ TeleprompterDock::TeleprompterDock(TeleprompterState *state, TeleprompterWindow 
 	refreshAudioSources();
 	syncFromState();
 	updateStatus();
+}
+
+void TeleprompterDock::changeEvent(QEvent *event)
+{
+	QWidget::changeEvent(event);
+	if (event->type() == QEvent::PaletteChange || event->type() == QEvent::StyleChange)
+		refreshControlIcons();
+}
+
+void TeleprompterDock::refreshControlIcons()
+{
+	const QColor normalColor = palette().color(QPalette::ButtonText);
+	for (const auto &[button, iconName] : controlButtons_) {
+		QString resourceName = iconName;
+		if (button == playPauseButton_ && state_->isPlaying())
+			resourceName = QStringLiteral("pause");
+		button->setIcon(SvgIcon(QStringLiteral(":/o-prompter/icons/%1.svg").arg(resourceName), normalColor));
+	}
+}
+
+void TeleprompterDock::updatePlayPauseButtonAppearance()
+{
+	if (!playPauseButton_)
+		return;
+
+	const int playbackState = int(state_->playbackState());
+	if (playPauseButton_->property("playbackAppearanceState").toInt() == playbackState &&
+	    playPauseButton_->property("playbackAppearanceInitialized").toBool())
+		return;
+
+	playPauseButton_->setProperty("playbackAppearanceState", playbackState);
+	playPauseButton_->setProperty("playbackAppearanceInitialized", true);
+	refreshControlIcons();
+
+	switch (state_->playbackState()) {
+	case TeleprompterPlaybackState::Playing:
+		playPauseButton_->setStyleSheet(QStringLiteral(
+			"QPushButton { background-color: #22c55e; border-color: #16a34a; }"
+			"QPushButton:hover { background-color: #4ade80; }"
+			"QPushButton:pressed { background-color: #16a34a; }"));
+		playPauseButton_->setToolTip(Tr("Button.Pause"));
+		break;
+	case TeleprompterPlaybackState::Paused:
+		playPauseButton_->setStyleSheet(QStringLiteral(
+			"QPushButton { background-color: #facc15; border-color: #eab308; }"
+			"QPushButton:hover { background-color: #fde047; }"
+			"QPushButton:pressed { background-color: #eab308; }"));
+		playPauseButton_->setToolTip(Tr("Button.Play"));
+		break;
+	case TeleprompterPlaybackState::Stopped:
+		playPauseButton_->setStyleSheet(QString());
+		playPauseButton_->setToolTip(Tr("Button.Play"));
+		break;
+	}
+	playPauseButton_->setAccessibleName(playPauseButton_->toolTip());
 }
 
 void TeleprompterDock::refreshScreens()
@@ -404,12 +488,63 @@ void TeleprompterDock::applyStyle()
 
 void TeleprompterDock::updateStatus()
 {
-	statusLabel_->setText(Tr("Status.PlaybackFormat")
-				      .arg(state_->isPlaying() ? Tr("State.Playing") : Tr("State.Paused"))
-				      .arg(state_->speed(), 0, 'f', 0)
-				      .arg(state_->progress() * 100.0, 0, 'f', 0));
+	updatePlaybackStatus();
 	remoteLabel_->setText(Tr("Status.RemoteFormat")
 				      .arg(remote_->isListening() ? Tr("State.Listening") : Tr("State.Stopped"))
 				      .arg(remote_->port())
 				      .arg(remote_->token()));
+}
+
+void TeleprompterDock::updatePlaybackStatus()
+{
+	QString playbackState;
+	switch (state_->playbackState()) {
+	case TeleprompterPlaybackState::Playing:
+		playbackState = Tr("State.Playing");
+		break;
+	case TeleprompterPlaybackState::Paused:
+		playbackState = Tr("State.Paused");
+		break;
+	case TeleprompterPlaybackState::Stopped:
+		playbackState = Tr("State.StoppedPlayback");
+		break;
+	}
+
+	const QString progress = QString::number(state_->progress() * 100.0, 'f', 0) + QLatin1Char('%');
+	const QString statusText = Tr("Status.PlaybackFormat")
+					.arg(playbackState)
+					.arg(state_->speed(), 0, 'f', 0)
+					.arg(state_->progress() * 100.0, 0, 'f', 0);
+	if (lastPlaybackStatusText_ != statusText) {
+		lastPlaybackStatusText_ = statusText;
+		statusLabel_->setText(statusText);
+	}
+
+	const int playbackStateValue = int(state_->playbackState());
+	const int progressValue = qRound(state_->progress() * 100.0);
+	if (lastHeaderPlaybackState_ != playbackStateValue || lastHeaderProgress_ != progressValue) {
+		lastHeaderPlaybackState_ = playbackStateValue;
+		lastHeaderProgress_ = progressValue;
+		playbackHeaderLabel_->setText(QStringLiteral("%1  •  %2").arg(playbackState, progress));
+
+		QString statusColor;
+		switch (state_->playbackState()) {
+		case TeleprompterPlaybackState::Playing:
+			statusColor = QStringLiteral("#4ade80");
+			break;
+		case TeleprompterPlaybackState::Paused:
+			statusColor = QStringLiteral("#facc15");
+			break;
+		case TeleprompterPlaybackState::Stopped:
+			statusColor = QStringLiteral("#f87171");
+			break;
+		}
+		if (playbackHeaderLabel_->property("oPrompterStatusColor").toString() != statusColor) {
+			playbackHeaderLabel_->setProperty("oPrompterStatusColor", statusColor);
+			playbackHeaderLabel_->setStyleSheet(
+				QStringLiteral("QLabel { color: %1; font-weight: 600; }").arg(statusColor));
+		}
+	}
+
+	updatePlayPauseButtonAppearance();
 }

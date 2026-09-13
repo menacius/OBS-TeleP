@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ObsTelePRemote"
+rootProject.name = "OPrompterRemote"
 include(":app")

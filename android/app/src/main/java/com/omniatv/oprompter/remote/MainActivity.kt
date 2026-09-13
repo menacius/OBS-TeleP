@@ -1,4 +1,4 @@
-package com.obstelep.remote
+package com.omniatv.oprompter.remote
 
 import android.app.Activity
 import android.content.res.ColorStateList
@@ -18,6 +18,8 @@ import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.ScrollView
@@ -45,14 +47,15 @@ class MainActivity : Activity() {
     private var remoteWriter: BufferedWriter? = null
     @Volatile private var pendingJog: Double? = null
     @Volatile private var jogInFlight = false
-    private val backgroundColor = Color.rgb(11, 15, 20)
-    private val panelColor = Color.rgb(20, 27, 34)
-    private val fieldColor = Color.rgb(28, 38, 48)
-    private val textColor = Color.rgb(232, 238, 245)
+    private val backgroundColor = Color.rgb(11, 18, 32)
+    private val panelColor = Color.rgb(16, 31, 55)
+    private val fieldColor = Color.rgb(22, 45, 78)
+    private val textColor = Color.rgb(229, 231, 235)
     private val mutedTextColor = Color.rgb(148, 163, 184)
     private val accentColor = Color.rgb(34, 197, 94)
     private val accentPressedColor = Color.rgb(21, 128, 61)
     private val pausedColor = Color.rgb(220, 38, 38)
+    private lateinit var layoutMetrics: LayoutMetrics
     private lateinit var host: EditText
     private lateinit var port: EditText
     private lateinit var token: EditText
@@ -83,14 +86,23 @@ class MainActivity : Activity() {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
+        layoutMetrics = calculateLayoutMetrics()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(32, 32, 32, 32)
+            setPadding(layoutMetrics.padding, layoutMetrics.padding, layoutMetrics.padding, layoutMetrics.padding)
             setBackgroundColor(backgroundColor)
         }
         val scroll = ScrollView(this).apply {
             setBackgroundColor(backgroundColor)
-            addView(root)
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(
+                root,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
         }
 
         host = edit("OBS IP address", prefs.getString("host", "192.168.1.10") ?: "192.168.1.10")
@@ -104,11 +116,44 @@ class MainActivity : Activity() {
         token.imeOptions = EditorInfo.IME_ACTION_DONE
         status = TextView(this).apply {
             text = "Disconnected"
-            textSize = 18f
+            textSize = 14f
             setTextColor(mutedTextColor)
-            setPadding(0, 24, 0, 24)
+            setPadding(0, dp(5), 0, dp(8))
         }
 
+        val brandRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, dp(3))
+        }
+        val brandIcon = ImageView(this).apply {
+            setImageResource(com.omniatv.oprompter.remote.R.drawable.ic_oprompter_brand)
+            contentDescription = "O-Prompter"
+        }
+        val brandText = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), 0, 0, 0)
+        }
+        brandText.addView(TextView(this).apply {
+            text = "O-Prompter"
+            textSize = 17f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(textColor)
+            includeFontPadding = false
+        })
+        brandText.addView(TextView(this).apply {
+            text = "TELEPROMPTER PLUGIN FOR OBS"
+            textSize = 8f
+            letterSpacing = 0.12f
+            setTextColor(mutedTextColor)
+            includeFontPadding = false
+        })
+        brandRow.addView(
+            brandIcon,
+            LinearLayout.LayoutParams(layoutMetrics.brandIconSize, layoutMetrics.brandIconSize)
+        )
+        brandRow.addView(brandText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        root.addView(brandRow)
         root.addView(status)
 
         controlTab = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -137,14 +182,14 @@ class MainActivity : Activity() {
             visibility = View.GONE
         }
 
-        modeOne.addView(holdJogButton("↑", -5.0, dp(112)))
-        modeOne.addView(bigPlayButton(dp(240)))
-        modeOne.addView(holdJogButton("↓", 5.0, dp(112)))
+        modeOne.addView(holdJogButton("↑", -5.0, layoutMetrics.jogButtonHeight))
+        modeOne.addView(bigPlayButton(layoutMetrics.primaryPlaySize))
+        modeOne.addView(holdJogButton("↓", 5.0, layoutMetrics.jogButtonHeight))
         row(modeOne, "Speed -" to "speedDown", "Speed +" to "speedUp")
 
         modeTwo.addView(joystick())
         modeTwo.addView(playButtonSpacer())
-        modeTwo.addView(bigPlayButton(dp(128)))
+        modeTwo.addView(bigPlayButton(layoutMetrics.secondaryPlaySize))
         controlTab.addView(modeOne)
         controlTab.addView(modeTwo)
 
@@ -163,9 +208,10 @@ class MainActivity : Activity() {
         settingsTab.addView(scriptUrl)
         settingsTab.addView(keepAwakeCheck(prefs.getBoolean("keepAwake", false)))
         row(settingsTab, "Scan Network" to "scan", "Load URL" to "loadUrl")
+        settingsTab.addView(aboutText())
         discoveredList = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 24, 0, 0)
+            setPadding(0, dp(8), 0, 0)
         }
         settingsTab.addView(discoveredList)
 
@@ -193,11 +239,14 @@ class MainActivity : Activity() {
             this.hint = hint
             setText(value)
             setSingleLine(true)
-            textSize = 16f
+            textSize = 14f
             setTextColor(textColor)
             setHintTextColor(mutedTextColor)
             backgroundTintList = ColorStateList.valueOf(fieldColor)
             setPadding(dp(12), 0, dp(12), 0)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(0, dp(2), 0, dp(2))
+            }
         }
 
     private fun persist(editText: EditText, key: String) {
@@ -212,16 +261,19 @@ class MainActivity : Activity() {
     }
 
     private fun row(root: LinearLayout, left: Pair<String, String>, right: Pair<String, String>) {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row.addView(button(left.first, left.second), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        row.addView(button(right.first, right.second), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBaselineAligned(false)
+        }
+        row.addView(button(left.first, left.second), weightedButtonParams(isLeft = true))
+        row.addView(button(right.first, right.second), weightedButtonParams(isLeft = false))
         root.addView(row)
     }
 
     private fun keepAwakeCheck(initial: Boolean): CheckBox =
         CheckBox(this).apply {
             text = "Always on screen"
-            textSize = 15f
+            textSize = 13f
             setTextColor(textColor)
             isChecked = initial
             setOnCheckedChangeListener { _, checked ->
@@ -249,10 +301,13 @@ class MainActivity : Activity() {
     private fun button(label: String, command: String): Button =
         Button(this).apply {
             text = label
-            textSize = 15f
+            textSize = 13f
+            isAllCaps = false
             setTextColor(textColor)
             background = rounded(panelColor, dp(10))
-            minHeight = dp(52)
+            minHeight = layoutMetrics.buttonMinHeight
+            minWidth = 0
+            setPadding(dp(6), 0, dp(6), 0)
             setOnClickListener {
                 if (command == "scan") scanNetwork() else send(command)
             }
@@ -261,16 +316,17 @@ class MainActivity : Activity() {
     private fun bigPlayButton(size: Int): Button =
         Button(this).apply {
             text = "Play/Pause"
-            textSize = 26f
+            textSize = 21f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.rgb(4, 12, 8))
-            background = rounded(pausedColor, dp(18))
+            background = rounded(pausedColor, dp(14))
             minHeight = size
             minWidth = size
+            setPadding(dp(6), 0, dp(6), 0)
             setOnClickListener { send("playPause") }
             layoutParams = LinearLayout.LayoutParams(size, size).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                setMargins(0, dp(12), 0, dp(18))
+                setMargins(0, layoutMetrics.controlGap, 0, layoutMetrics.controlGap)
             }
             playButtons.add(this)
         }
@@ -278,11 +334,14 @@ class MainActivity : Activity() {
     private fun holdJogButton(label: String, multiplier: Double, height: Int): Button =
         Button(this).apply {
             text = label
-            textSize = 44f
+            textSize = 34f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(textColor)
-            background = rounded(fieldColor, dp(18))
+            background = rounded(fieldColor, dp(14))
             minHeight = height
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, height).apply {
+                setMargins(0, layoutMetrics.controlGap / 2, 0, layoutMetrics.controlGap / 2)
+            }
             setOnTouchListener { _, event ->
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
@@ -303,10 +362,10 @@ class MainActivity : Activity() {
             max = 200
             progress = 100
             rotation = 270f
-            scaleY = 2.8f
-            layoutParams = LinearLayout.LayoutParams(dp(420), dp(180)).apply {
+            scaleY = layoutMetrics.joystickScale
+            layoutParams = LinearLayout.LayoutParams(layoutMetrics.joystickWidth, layoutMetrics.joystickHeight).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                setMargins(0, dp(96), 0, dp(96))
+                setMargins(0, layoutMetrics.joystickMargin, 0, layoutMetrics.joystickMargin)
             }
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -328,9 +387,18 @@ class MainActivity : Activity() {
     private fun playButtonSpacer(): TextView =
         TextView(this).apply {
             text = "Joystick center = stop"
-            textSize = 16f
+            textSize = 13f
             gravity = Gravity.CENTER_HORIZONTAL
             setTextColor(mutedTextColor)
+        }
+
+    private fun aboutText(): TextView =
+        TextView(this).apply {
+            text = "O-Prompter\nTELEPROMPTER PLUGIN FOR OBS\nRemote Control\nDeveloped by OmniaTV"
+            textSize = 12f
+            gravity = Gravity.CENTER_HORIZONTAL
+            setTextColor(mutedTextColor)
+            setPadding(0, dp(10), 0, dp(4))
         }
 
     private fun rounded(color: Int, radius: Int): GradientDrawable =
@@ -341,6 +409,58 @@ class MainActivity : Activity() {
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
+
+    private fun weightedButtonParams(isLeft: Boolean): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            val gap = layoutMetrics.rowGap / 2
+            setMargins(if (isLeft) 0 else gap, gap, if (isLeft) gap else 0, gap)
+        }
+
+    private fun calculateLayoutMetrics(): LayoutMetrics {
+        val metrics = resources.displayMetrics
+        val width = metrics.widthPixels
+        val height = metrics.heightPixels
+        val shortest = minOf(width, height)
+        val padding = (shortest / 32).coerceIn(dp(8), dp(20))
+        val usableWidth = width - (padding * 2)
+        val usableHeight = height - (padding * 2)
+        val primaryPlaySize = minOf((usableWidth * 0.46f).toInt(), (usableHeight * 0.20f).toInt())
+            .coerceIn(dp(112), dp(180))
+        val secondaryPlaySize = minOf((usableWidth * 0.34f).toInt(), (usableHeight * 0.14f).toInt())
+            .coerceIn(dp(84), dp(120))
+        val jogButtonHeight = (usableHeight * 0.10f).toInt().coerceIn(dp(54), dp(82))
+        val joystickWidth = (usableWidth * 0.78f).toInt().coerceIn(dp(180), dp(480))
+        val joystickHeight = (usableHeight * 0.13f).toInt().coerceIn(dp(92), dp(148))
+        return LayoutMetrics(
+            padding = padding,
+            brandIconSize = (shortest * 0.10f).toInt().coerceIn(dp(38), dp(48)),
+            buttonMinHeight = dp(40),
+            rowGap = dp(4),
+            controlGap = dp(6),
+            primaryPlaySize = primaryPlaySize,
+            secondaryPlaySize = secondaryPlaySize,
+            jogButtonHeight = jogButtonHeight,
+            joystickWidth = joystickWidth,
+            joystickHeight = joystickHeight,
+            joystickMargin = (usableHeight * 0.035f).toInt().coerceIn(dp(14), dp(42)),
+            joystickScale = if (shortest < dp(360)) 2.0f else 2.5f
+        )
+    }
+
+    private data class LayoutMetrics(
+        val padding: Int,
+        val brandIconSize: Int,
+        val buttonMinHeight: Int,
+        val rowGap: Int,
+        val controlGap: Int,
+        val primaryPlaySize: Int,
+        val secondaryPlaySize: Int,
+        val jogButtonHeight: Int,
+        val joystickWidth: Int,
+        val joystickHeight: Int,
+        val joystickMargin: Int,
+        val joystickScale: Float
+    )
 
     private fun scanNetwork() {
         showStatus("Scanning for teleprompters...")
@@ -355,7 +475,7 @@ class MainActivity : Activity() {
                     socket.bind(InetSocketAddress(0))
 
                     val payload = JSONObject()
-                        .put("type", "obs-telep-discover")
+                        .put("type", "o-prompter-discover")
                         .put("version", 1)
                         .toString()
                         .toByteArray(Charsets.UTF_8)
@@ -371,7 +491,8 @@ class MainActivity : Activity() {
                             val packet = DatagramPacket(buffer, buffer.size)
                             socket.receive(packet)
                             val json = JSONObject(String(packet.data, packet.offset, packet.length, Charsets.UTF_8))
-                            if (json.optString("type") == "obs-telep") {
+                            val type = json.optString("type")
+                            if (type == "o-prompter" || type == "obs-telep") {
                                 json.put("host", packet.address.hostAddress)
                                 found["${packet.address.hostAddress}:${json.optInt("port", 4457)}"] = json
                             }
@@ -411,7 +532,7 @@ class MainActivity : Activity() {
                 val resultHost = result.optString("host")
                 val resultPort = result.optInt("port", 4457).toString()
                 val title = result.optString("title", "Untitled")
-                val name = result.optString("name", "OBS TeleP")
+                val name = result.optString("name", "O-Prompter")
                 val button = Button(this).apply {
                     text = "$name - $title\n$resultHost:$resultPort"
                     textSize = 14f

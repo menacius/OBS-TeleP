@@ -2,6 +2,7 @@
 
 #include "teleprompter-locale.hpp"
 
+#include <QAbstractTextDocumentLayout>
 #include <QGuiApplication>
 #include <QHideEvent>
 #include <QImage>
@@ -10,6 +11,7 @@
 #include <QScreen>
 #include <QTextBlock>
 #include <QTextCursor>
+#include <QTextLayout>
 #include <QStaticText>
 
 namespace {
@@ -74,9 +76,9 @@ void TeleprompterWindow::rebuildDocument()
 	charFormat.setForeground(style.textColor);
 	cursor.mergeCharFormat(charFormat);
 
-	state_->setContentHeight(document_.size().height());
+	updateScrollMetrics();
 	if (preserveProgress)
-		state_->setPosition(oldProgress * document_.size().height());
+		state_->setPosition(oldProgress * state_->contentHeight());
 	lastScript_ = script;
 	update();
 }
@@ -88,7 +90,38 @@ void TeleprompterWindow::updateDocumentWidth()
 		return;
 	documentWidth_ = nextWidth;
 	document_.setTextWidth(documentWidth_);
-	state_->setContentHeight(document_.size().height());
+	updateScrollMetrics();
+}
+
+void TeleprompterWindow::updateScrollMetrics()
+{
+	// QTextLayout line data is populated lazily. Force a full layout before
+	// using lineCount(), or a valid script can incorrectly get a zero range.
+	document_.documentLayout()->documentSize();
+
+	double firstBaseline = 0.0;
+	double lastBaseline = 0.0;
+	bool foundText = false;
+
+	for (QTextBlock block = document_.begin(); block.isValid(); block = block.next()) {
+		const QTextLayout *layout = block.layout();
+		if (block.text().trimmed().isEmpty() || !layout || layout->lineCount() == 0)
+			continue;
+
+		const QRectF blockRect = document_.documentLayout()->blockBoundingRect(block);
+		const QTextLine firstLine = layout->lineAt(0);
+		const QTextLine lastLine = layout->lineAt(layout->lineCount() - 1);
+		const double blockFirstBaseline = blockRect.top() + firstLine.y() + firstLine.ascent();
+		const double blockLastBaseline = blockRect.top() + lastLine.y() + lastLine.ascent();
+		if (!foundText) {
+			firstBaseline = blockFirstBaseline;
+			foundText = true;
+		}
+		lastBaseline = blockLastBaseline;
+	}
+
+	firstLineBaseline_ = foundText ? firstBaseline : 0.0;
+	state_->setContentHeight(foundText ? qMax(0.0, lastBaseline - firstBaseline) : 0.0);
 }
 
 void TeleprompterWindow::paintEvent(QPaintEvent *)
@@ -124,10 +157,13 @@ void TeleprompterWindow::paintTeleprompter(QPainter &painter, const QSizeF &canv
 	applyOutputTransform(painter, style, canvasSize);
 
 	double y = -state_->position();
-	if (style.verticalAlignment & Qt::AlignVCenter)
+	if (style.showPositionIndicator) {
+		y += canvasSize.height() / 2.0 - firstLineBaseline_;
+	} else if (style.verticalAlignment & Qt::AlignVCenter) {
 		y += (canvasSize.height() - document_.size().height()) / 2.0;
-	else if (style.verticalAlignment & Qt::AlignBottom)
+	} else if (style.verticalAlignment & Qt::AlignBottom) {
 		y += canvasSize.height() - document_.size().height();
+	}
 
 	const QRectF visibleRect(0, -y, canvasSize.width(), canvasSize.height());
 	painter.translate(0, y);
@@ -141,9 +177,35 @@ void TeleprompterWindow::paintTeleprompter(QPainter &painter, const QSizeF &canv
 		painter.drawLine(24, indicatorY, int(canvasSize.width()) - 24, indicatorY);
 	}
 
+	paintProgressBar(painter, canvasSize);
+
 	painter.save();
 	applyOutputTransform(painter, style, canvasSize);
 	paintOverlay(painter, canvasSize);
+	painter.restore();
+}
+
+void TeleprompterWindow::paintProgressBar(QPainter &painter, const QSizeF &canvasSize)
+{
+	const TeleprompterProgressBarSettings progressBar = state_->progressBarSettings();
+	if (!progressBar.enabled)
+		return;
+
+	const int thickness = qBound(2, progressBar.thickness, 80);
+	const int x = progressBar.position == 0 ? 0 : int(canvasSize.width()) - thickness;
+	const QRectF track(x, 0, thickness, canvasSize.height());
+	const double filledHeight = canvasSize.height() * state_->progress();
+	const QRectF fill(x, canvasSize.height() - filledHeight, thickness, filledHeight);
+	QColor trackColor = progressBar.color;
+	trackColor.setAlpha(qMin(90, qMax(28, progressBar.color.alpha() / 3)));
+
+	painter.save();
+	painter.setRenderHint(QPainter::Antialiasing, false);
+	painter.setPen(Qt::NoPen);
+	painter.setBrush(trackColor);
+	painter.drawRect(track);
+	painter.setBrush(progressBar.color);
+	painter.drawRect(fill);
 	painter.restore();
 }
 
@@ -205,12 +267,12 @@ void TeleprompterWindow::paintOverlay(QPainter &painter, const QSizeF &canvasSiz
 	painter.save();
 	painter.setRenderHint(QPainter::Antialiasing, true);
 	painter.setPen(Qt::NoPen);
-	painter.setBrush(QColor(12, 10, 18, 210));
+	painter.setBrush(QColor(11, 18, 32, 220));
 	painter.drawRoundedRect(panel, 7, 7);
-	painter.setBrush(QColor(210, 46, 0));
+	painter.setBrush(QColor(14, 165, 255));
 	painter.drawRoundedRect(QRect(panel.left(), panel.top(), accentWidth, panel.height()), 3, 3);
 	painter.setFont(font);
-	painter.setPen(QColor(245, 245, 248));
+	painter.setPen(QColor(229, 231, 235));
 	painter.drawText(panel.adjusted(accentWidth + paddingX, paddingY, -paddingX, -paddingY), Qt::AlignVCenter | Qt::AlignLeft, text);
 	painter.restore();
 }

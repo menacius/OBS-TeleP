@@ -1,6 +1,6 @@
-# OBS TeleP Remote Protocol
+# O-Prompter Remote Protocol
 
-OBS TeleP exposes a local TCP server for LAN remotes.
+O-Prompter exposes a local TCP server for LAN remotes.
 
 - Default host: all IPv4 interfaces
 - Default port: `4457`
@@ -34,18 +34,18 @@ For Etherpad-style URLs containing `/p/{pad}`, the plugin requests `/export/txt`
 
 ## Discovery
 
-Android remotes can discover local OBS TeleP instances by sending this UDP datagram to port `4458` on the local broadcast address:
+Android remotes can discover local O-Prompter instances by sending this UDP datagram to port `4458` on the local broadcast address:
 
 ```json
-{"type":"obs-telep-discover","version":1}
+{"type":"o-prompter-discover","version":1}
 ```
 
 The plugin replies directly to the sender:
 
 ```json
 {
-  "type": "obs-telep",
-  "name": "OBS TeleP",
+  "type": "o-prompter",
+  "name": "O-Prompter",
   "title": "Morning bulletin",
   "port": 4457,
   "discoveryPort": 4458,

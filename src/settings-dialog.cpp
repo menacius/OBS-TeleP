@@ -5,6 +5,7 @@
 #include <obs-module.h>
 
 #include <QCheckBox>
+#include <QColorDialog>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -17,6 +18,7 @@
 #include <QPushButton>
 #include <QScreen>
 #include <QSignalBlocker>
+#include <QSpinBox>
 #include <QSvgRenderer>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -63,6 +65,14 @@ TeleprompterSettingsDialog::TeleprompterSettingsDialog(TeleprompterState *state,
 	overlayStateCheck_ = new QCheckBox(Tr("Overlay.PlaybackState"), this);
 	overlaySpeedCheck_ = new QCheckBox(Tr("Overlay.Speed"), this);
 	overlayTitleCheck_ = new QCheckBox(Tr("Overlay.Title"), this);
+	progressBarEnabledCheck_ = new QCheckBox(Tr("ProgressBar.Enabled"), this);
+	progressBarPositionCombo_ = new QComboBox(this);
+	progressBarPositionCombo_->addItem(Tr("ProgressBar.Left"), 0);
+	progressBarPositionCombo_->addItem(Tr("ProgressBar.Right"), 1);
+	progressBarThicknessSpin_ = new QSpinBox(this);
+	progressBarThicknessSpin_->setRange(2, 80);
+	progressBarThicknessSpin_->setSuffix(Tr("Unit.Pixels"));
+	progressBarColorButton_ = new QPushButton(Tr("ProgressBar.Color"), this);
 
 	form->addRow(overlayEnabledCheck_);
 	form->addRow(Tr("Overlay.Position"), overlayPositionCombo_);
@@ -70,6 +80,10 @@ TeleprompterSettingsDialog::TeleprompterSettingsDialog(TeleprompterState *state,
 	form->addRow(overlayStateCheck_);
 	form->addRow(overlaySpeedCheck_);
 	form->addRow(overlayTitleCheck_);
+	form->addRow(progressBarEnabledCheck_);
+	form->addRow(Tr("ProgressBar.Position"), progressBarPositionCombo_);
+	form->addRow(Tr("ProgressBar.Thickness"), progressBarThicknessSpin_);
+	form->addRow(Tr("ProgressBar.Color"), progressBarColorButton_);
 	root->addLayout(form);
 
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
@@ -86,6 +100,10 @@ TeleprompterSettingsDialog::TeleprompterSettingsDialog(TeleprompterState *state,
 	connect(overlayStateCheck_, &QCheckBox::toggled, this, &TeleprompterSettingsDialog::applyOverlay);
 	connect(overlaySpeedCheck_, &QCheckBox::toggled, this, &TeleprompterSettingsDialog::applyOverlay);
 	connect(overlayTitleCheck_, &QCheckBox::toggled, this, &TeleprompterSettingsDialog::applyOverlay);
+	connect(progressBarEnabledCheck_, &QCheckBox::toggled, this, &TeleprompterSettingsDialog::applyProgressBar);
+	connect(progressBarPositionCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &TeleprompterSettingsDialog::applyProgressBar);
+	connect(progressBarThicknessSpin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &TeleprompterSettingsDialog::applyProgressBar);
+	connect(progressBarColorButton_, &QPushButton::clicked, this, &TeleprompterSettingsDialog::chooseProgressBarColor);
 	connect(state_, &TeleprompterState::displayChanged, this, &TeleprompterSettingsDialog::syncFromState);
 	connect(qApp, &QGuiApplication::screenAdded, this, &TeleprompterSettingsDialog::refreshScreens);
 	connect(qApp, &QGuiApplication::screenRemoved, this, &TeleprompterSettingsDialog::refreshScreens);
@@ -139,6 +157,9 @@ void TeleprompterSettingsDialog::syncFromState()
 	const QSignalBlocker overlayStateBlocker(overlayStateCheck_);
 	const QSignalBlocker overlaySpeedBlocker(overlaySpeedCheck_);
 	const QSignalBlocker overlayTitleBlocker(overlayTitleCheck_);
+	const QSignalBlocker progressBarEnabledBlocker(progressBarEnabledCheck_);
+	const QSignalBlocker progressBarPositionBlocker(progressBarPositionCombo_);
+	const QSignalBlocker progressBarThicknessBlocker(progressBarThicknessSpin_);
 
 	const int target = state_->targetScreenIndex();
 	for (int row = 0; row < displayTable_->rowCount(); ++row) {
@@ -160,6 +181,13 @@ void TeleprompterSettingsDialog::syncFromState()
 	overlayStateCheck_->setChecked(overlay.showPlaybackState);
 	overlaySpeedCheck_->setChecked(overlay.showSpeed);
 	overlayTitleCheck_->setChecked(overlay.showTitle);
+
+	const TeleprompterProgressBarSettings progressBar = state_->progressBarSettings();
+	progressBarEnabledCheck_->setChecked(progressBar.enabled);
+	const int progressBarPositionIndex = progressBarPositionCombo_->findData(progressBar.position);
+	progressBarPositionCombo_->setCurrentIndex(progressBarPositionIndex >= 0 ? progressBarPositionIndex : 1);
+	progressBarThicknessSpin_->setValue(progressBar.thickness);
+	progressBarColorButton_->setStyleSheet(QStringLiteral("background-color: %1;").arg(progressBar.color.name()));
 }
 
 void TeleprompterSettingsDialog::applyDisplay(QTableWidgetItem *item)
@@ -208,11 +236,31 @@ void TeleprompterSettingsDialog::applyOverlay()
 	state_->setOverlaySettings(overlay);
 }
 
+void TeleprompterSettingsDialog::applyProgressBar()
+{
+	TeleprompterProgressBarSettings progressBar = state_->progressBarSettings();
+	progressBar.enabled = progressBarEnabledCheck_->isChecked();
+	progressBar.position = progressBarPositionCombo_->currentData().toInt();
+	progressBar.thickness = progressBarThicknessSpin_->value();
+	state_->setProgressBarSettings(progressBar);
+}
+
+void TeleprompterSettingsDialog::chooseProgressBarColor()
+{
+	TeleprompterProgressBarSettings progressBar = state_->progressBarSettings();
+	const QColor color = QColorDialog::getColor(progressBar.color, this, Tr("ProgressBar.Color"));
+	if (!color.isValid())
+		return;
+	progressBar.color = color;
+	state_->setProgressBarSettings(progressBar);
+	syncFromState();
+}
+
 QPixmap TeleprompterSettingsDialog::iconPixmap(int size) const
 {
 	QPixmap pixmap(size, size);
 	pixmap.fill(Qt::transparent);
-	char *path = obs_module_file("telep-icon.svg");
+	char *path = obs_module_file("o-prompter-icon.svg");
 	if (path) {
 		QSvgRenderer renderer(QString::fromUtf8(path));
 		QPainter painter(&pixmap);
@@ -228,6 +276,6 @@ void TeleprompterSettingsDialog::showAbout()
 	box.setWindowTitle(Tr("About.Title"));
 	box.setIconPixmap(iconPixmap(96));
 	box.setText(Tr("About.Text"));
-	box.setInformativeText(Tr("About.Info"));
+	box.setInformativeText(Tr("About.Info").arg(QStringLiteral(PLUGIN_VERSION)));
 	box.exec();
 }

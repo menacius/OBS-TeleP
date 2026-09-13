@@ -8,6 +8,7 @@
 class QCheckBox;
 class QComboBox;
 class QLabel;
+class QSpinBox;
 class QTableWidget;
 class QTableWidgetItem;
 
@@ -23,6 +24,8 @@ private slots:
 	void applyDisplay(QTableWidgetItem *item);
 	void applyRenderScale();
 	void applyOverlay();
+	void applyProgressBar();
+	void chooseProgressBarColor();
 	void showAbout();
 
 private:
@@ -39,5 +42,9 @@ private:
 	QCheckBox *overlayStateCheck_ = nullptr;
 	QCheckBox *overlaySpeedCheck_ = nullptr;
 	QCheckBox *overlayTitleCheck_ = nullptr;
+	QCheckBox *progressBarEnabledCheck_ = nullptr;
+	QComboBox *progressBarPositionCombo_ = nullptr;
+	QSpinBox *progressBarThicknessSpin_ = nullptr;
+	QPushButton *progressBarColorButton_ = nullptr;
 	bool syncingDisplay_ = false;
 };

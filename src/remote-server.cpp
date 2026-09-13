@@ -100,7 +100,8 @@ void RemoteServer::readDiscoveryDatagram()
 			continue;
 
 		const QJsonObject object = document.object();
-		if (object["type"].toString() != QStringLiteral("obs-telep-discover"))
+		const QString type = object["type"].toString();
+		if (type != QStringLiteral("o-prompter-discover") && type != QStringLiteral("obs-telep-discover"))
 			continue;
 
 		const QByteArray response = makeDiscoveryResponse();
@@ -192,8 +193,8 @@ void RemoteServer::loadScriptFromUrl(const QString &urlText)
 QByteArray RemoteServer::makeDiscoveryResponse() const
 {
 	QJsonObject object;
-	object["type"] = "obs-telep";
-	object["name"] = "OBS TeleP";
+	object["type"] = "o-prompter";
+	object["name"] = "O-Prompter";
 	object["title"] = state_->title();
 	object["port"] = int(port());
 	object["discoveryPort"] = 4458;

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="background" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#123B72"/>
+      <stop offset="1" stop-color="#071225"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="112" y1="104" x2="402" y2="390" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5FF"/>
+      <stop offset="0.52" stop-color="#168CFF"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#background)"/>
+  <path d="M132 116h178c24 0 42 21 38 45l-36 224c-3 19-20 33-39 33H115c-24 0-42-22-37-45l40-224c3-19 20-33 39-33z" fill="#0EA5FF" opacity=".25" filter="url(#glow)"/>
+  <path d="M151 111h156c24 0 42 22 38 45l-34 208c-3 19-20 33-39 33H130c-24 0-42-22-38-45l36-208c3-19 13-33 23-33z" fill="none" stroke="url(#brand)" stroke-width="35" stroke-linejoin="round"/>
+  <path d="M318 177l107 78c14 10 14 31 0 41l-107 78z" fill="url(#brand)"/>
+  <path d="M166 190h103M156 256h101M145 322h99" fill="none" stroke="#E5E7EB" stroke-width="24" stroke-linecap="round"/>
+</svg>

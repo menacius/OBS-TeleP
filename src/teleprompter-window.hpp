@@ -25,11 +25,14 @@ private slots:
 
 private:
 	void updateDocumentWidth();
+	void updateScrollMetrics();
 	void paintTeleprompter(QPainter &painter, const QSizeF &canvasSize);
 	void paintOverlay(QPainter &painter, const QSizeF &canvasSize);
+	void paintProgressBar(QPainter &painter, const QSizeF &canvasSize);
 
 	TeleprompterState *state_ = nullptr;
 	QTextDocument document_;
 	int documentWidth_ = 0;
+	double firstLineBaseline_ = 0.0;
 	QString lastScript_;
 };

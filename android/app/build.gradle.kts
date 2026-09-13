@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.obstelep.remote"
+    namespace = "com.omniatv.oprompter.remote"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.obstelep.remote"
+        applicationId = "com.omniatv.oprompter.remote"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

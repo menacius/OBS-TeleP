@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(obs-telep VERSION 0.1.0 LANGUAGES C CXX)
+project(o-prompter VERSION 0.1.0 LANGUAGES C CXX)
 
-set(PLUGIN_NAME "obs-telep")
+set(PLUGIN_NAME "o-prompter")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
   set(OBS_ARCH_DIR "64bit")
@@ -14,8 +15,8 @@ else()
   set(OBS_ARCH_DIR "32bit")
 endif()
 
-set(OBS_TELEP_PACKAGE_DIR "${CMAKE_BINARY_DIR}/${PLUGIN_NAME}" CACHE PATH "Staged OBS plugin package directory")
-set(OBS_TELEP_PACKAGE_BIN_DIR "${OBS_TELEP_PACKAGE_DIR}/bin/${OBS_ARCH_DIR}")
+set(O_PROMPTER_PACKAGE_DIR "${CMAKE_BINARY_DIR}/${PLUGIN_NAME}" CACHE PATH "Staged O-Prompter plugin package directory")
+set(O_PROMPTER_PACKAGE_BIN_DIR "${O_PROMPTER_PACKAGE_DIR}/bin/${OBS_ARCH_DIR}")
 
 find_package(libobs QUIET)
 find_package(obs-frontend-api QUIET)
@@ -135,6 +136,7 @@ endif()
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Network Svg)
 
 add_library(${PLUGIN_NAME} MODULE
+  data/icons.qrc
   src/plugin-main.cpp
   src/teleprompter-state.cpp
   src/teleprompter-window.cpp
@@ -171,8 +173,8 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE
 
 set_target_properties(${PLUGIN_NAME} PROPERTIES
   PREFIX ""
-  LIBRARY_OUTPUT_DIRECTORY "${OBS_TELEP_PACKAGE_BIN_DIR}"
-  RUNTIME_OUTPUT_DIRECTORY "${OBS_TELEP_PACKAGE_BIN_DIR}"
+  LIBRARY_OUTPUT_DIRECTORY "${O_PROMPTER_PACKAGE_BIN_DIR}"
+  RUNTIME_OUTPUT_DIRECTORY "${O_PROMPTER_PACKAGE_BIN_DIR}"
   ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
 )
 
@@ -183,17 +185,17 @@ endif()
 foreach(config IN LISTS CMAKE_CONFIGURATION_TYPES)
   string(TOUPPER "${config}" config_upper)
   set_target_properties(${PLUGIN_NAME} PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY_${config_upper} "${OBS_TELEP_PACKAGE_BIN_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY_${config_upper} "${OBS_TELEP_PACKAGE_BIN_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY_${config_upper} "${O_PROMPTER_PACKAGE_BIN_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_${config_upper} "${O_PROMPTER_PACKAGE_BIN_DIR}"
     ARCHIVE_OUTPUT_DIRECTORY_${config_upper} "${CMAKE_BINARY_DIR}/lib/${config}"
   )
 endforeach()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/data")
   add_custom_command(TARGET ${PLUGIN_NAME} POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${OBS_TELEP_PACKAGE_DIR}/data"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/data" "${OBS_TELEP_PACKAGE_DIR}/data"
-    COMMENT "Staging OBS TeleP data files"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${O_PROMPTER_PACKAGE_DIR}/data"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_SOURCE_DIR}/data" "${O_PROMPTER_PACKAGE_DIR}/data"
+    COMMENT "Staging O-Prompter data files"
   )
 endif()
 
